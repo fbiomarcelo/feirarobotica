@@ -507,7 +507,7 @@
             async callGemini(prompt) {
                 this.state.loading = true;
                 this.render();
-                const apiKey = "AIzaSyAmC4xcR1eR9NU1_D0LZBxAiXC_M8OratY"; 
+                const apiKey = "COLE SEU API AQUI"; 
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
                 const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
                 try {
