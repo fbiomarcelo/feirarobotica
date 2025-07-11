@@ -507,7 +507,7 @@
             async callGemini(prompt) {
                 this.state.loading = true;
                 this.render();
-                const apiKey = "COLE SEU API AQUI"; 
+                const apiKey = ""; 
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
                 const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
                 try {
@@ -559,16 +559,19 @@
                 try {
                     const audioPlayer = this.dom.championAudio;
                     // =================================================================
-                    // LOCAL PARA INSERIR O LINK DA MÚSICA
+                    // LINK DA MÚSICA ATUALIZADO
                     // =================================================================
-                    // Substitua a string vazia pelo link direto para o seu ficheiro .mp3
-                    audioPlayer.src = "https://github.com/fbiomarcelo/feirarobotica/blob/main/We%20Are%20the%20Champions%20-%20Queen(com%20tradu%C3%A7%C3%A3o).mp3"; 
+                    audioPlayer.src = "https://ia802901.us.archive.org/9/items/we-are-the-champions-queencom-traducao/We%20Are%20the%20Champions%20-%20Queen%28com%20tradu%C3%A7%C3%A3o%29.mp3"; 
                     // =================================================================
                     
-                    audioPlayer.play().catch(e => {
-                        console.error("Erro ao tocar o áudio:", e);
-                        this.showInfoModal('Aviso de Áudio', '<p>O navegador impediu a reprodução automática do áudio. Por favor, interaja com a página primeiro.</p>');
-                    });
+                    const playPromise = audioPlayer.play();
+                    if (playPromise !== undefined) {
+                        playPromise.catch(error => {
+                            console.error("Erro ao tocar o áudio:", error);
+                            // O aviso ao usuário já é uma boa prática, mantemos
+                            this.showInfoModal('Aviso de Áudio', '<p>O navegador impediu a reprodução automática do áudio. Por favor, interaja com a página primeiro.</p>');
+                        });
+                    }
                 } catch (e) {
                     console.error("Erro na função de áudio:", e);
                 }
