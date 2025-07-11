@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel - IVª Exposição de Robótica Municipal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f0f2f5;
+        }
+        .tab-button.active {
+            border-bottom-color: #154c9a;
+            color: #154c9a;
+            font-weight: 700;
+        }
+        .bracket {
+            display: flex;
+            justify-content: center;
+            padding: 2rem 0;
+            overflow-x: auto;
+        }
+        .round {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            margin: 0 30px;
+        }
+        .match {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin: 20px 0;
+            padding: 10px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            width: 200px;
+            min-height: 80px;
+            cursor: pointer;
+        }
+        .match.bye {
+            background-color: #e5e7eb;
+            cursor: default;
+        }
+        .team {
+            width: 100%;
+            padding: 5px;
+            text-align: center;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+            pointer-events: none; /* Clicks are handled by the parent .match */
+        }
+        .team.winner {
+            font-weight: bold;
+            background-color: #d1fae5;
+        }
+        .team.empty {
+            color: #9ca3af;
+            font-style: italic;
+        }
+        .match-connector {
+            position: absolute;
+            top: 50%;
+            right: -30px;
+            width: 30px;
+            height: 2px;
+            background-color: #9ca3af;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            padding: 1rem;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #09f;
+            animation: spin 1s ease infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Style for disabled buttons */
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div id="app" class="container mx-auto p-4 md:p-8">
+
+        <!-- Cabeçalho -->
+        <header class="flex flex-col md:flex-row items-center justify-between mb-6 p-4 bg-white rounded-lg shadow-md">
+            <div class="flex items-center">
+                <img src="https://i.imgur.com/0BapL2V.png" alt="Brasão da Prefeitura de Porto Feliz" class="h-24 mr-4">
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-bold text-[#154c9a]">IVª Exposição de Robótica Municipal</h1>
+                    <p class="text-lg text-gray-600">Prefeitura Municipal de Porto Feliz</p>
+                </div>
+            </div>
+            <nav id="main-nav" class="mt-4 md:mt-0">
+                <button data-tab="home" class="tab-button text-lg px-4 py-2 border-b-4 border-transparent transition">Painel Principal</button>
+                <button data-tab="timers" class="tab-button text-lg px-4 py-2 border-b-4 border-transparent transition">Cronômetros</button>
+                <button data-tab="brackets" class="tab-button text-lg px-4 py-2 border-b-4 border-transparent transition">Chaveamentos</button>
+                <button data-tab="teams" class="tab-button text-lg px-4 py-2 border-b-4 border-transparent transition">Equipes e Placar</button>
+            </nav>
+        </header>
+
+        <main id="content">
+            <!-- Conteúdo das abas será renderizado aqui -->
+        </main>
+    </div>
+    
+    <audio id="champion-audio" preload="auto"></audio>
+
+    <!-- Modal para seleção de vencedor -->
+    <div id="winner-modal" class="modal-overlay hidden">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm text-center">
+            <h3 class="text-2xl font-bold mb-6">Quem venceu o duelo?</h3>
+            <div id="winner-options" class="space-y-4"></div>
+            <button id="cancel-winner-selection" class="mt-6 bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 transition">Cancelar</button>
+        </div>
+    </div>
+    
+    <!-- Modal para conteúdo do Gemini (e avisos) -->
+    <div id="gemini-modal" class="modal-overlay hidden">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-2xl">
+            <h3 id="gemini-modal-title" class="text-2xl font-bold mb-6 text-center"></h3>
+            <div id="gemini-modal-content" class="text-left max-h-[60vh] overflow-y-auto"></div>
+            <div class="text-center">
+                <button id="gemini-modal-close" class="mt-6 bg-[#154c9a] text-white px-6 py-2 rounded-lg hover:opacity-90 transition">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Confirmação -->
+    <div id="confirm-modal" class="modal-overlay hidden">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm text-center">
+            <h3 id="confirm-modal-title" class="text-xl font-bold mb-6"></h3>
+            <div class="flex justify-center space-x-4">
+                <button id="confirm-modal-cancel" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 transition">Cancelar</button>
+                <button id="confirm-modal-confirm" class="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const App = {
+            // =================================================================
+            // ESTADO INICIAL DO APLICATIVO
+            // =================================================================
+            state: {
+                currentTab: 'home',
+                teams: [],
+                competitions: {
+                    seguidorLinha: { name: 'Robô Seguidor de Linha', type: 'time', results: [] },
+                    autonomo: { name: 'Robô Autônomo', type: 'time', results: [] },
+                    furaBaloes: { name: 'Robô Fura Balões', type: 'bracket', bracket: null },
+                    corrida: { name: 'Robô Desafio de Corrida', type: 'bracket', bracket: null }
+                },
+                timer: { 
+                    instance: null, 
+                    startTime: 0, 
+                    elapsed: 0, 
+                    running: false,
+                    activeTeamId: null
+                },
+                activeTimerId: 'seguidorLinha',
+                activeBracketId: 'furaBaloes',
+                loading: false,
+                announcement: 'Clique no botão "Gerar Anúncio" para ver a magia acontecer!',
+            },
+
+            // =================================================================
+            // INICIALIZAÇÃO
+            // =================================================================
+            init() {
+                this.cacheDOM();
+                this.bindEvents();
+                this.render();
+            },
+
+            cacheDOM() {
+                this.dom = {
+                    app: document.getElementById('app'),
+                    nav: document.getElementById('main-nav'),
+                    content: document.getElementById('content'),
+                    winnerModal: document.getElementById('winner-modal'),
+                    winnerOptions: document.getElementById('winner-options'),
+                    cancelWinnerBtn: document.getElementById('cancel-winner-selection'),
+                    geminiModal: document.getElementById('gemini-modal'),
+                    geminiModalTitle: document.getElementById('gemini-modal-title'),
+                    geminiModalContent: document.getElementById('gemini-modal-content'),
+                    geminiModalClose: document.getElementById('gemini-modal-close'),
+                    confirmModal: document.getElementById('confirm-modal'),
+                    confirmModalTitle: document.getElementById('confirm-modal-title'),
+                    confirmModalCancel: document.getElementById('confirm-modal-cancel'),
+                    confirmModalConfirm: document.getElementById('confirm-modal-confirm'),
+                    championAudio: document.getElementById('champion-audio'),
+                };
+            },
+
+            bindEvents() {
+                this.dom.nav.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('tab-button')) {
+                        this.state.currentTab = e.target.dataset.tab;
+                        this.render();
+                    }
+                });
+
+                this.dom.content.addEventListener('change', this.handleContentChange.bind(this));
+                this.dom.content.addEventListener('click', this.handleContentClick.bind(this));
+                
+                const closeModal = (modal) => modal.classList.add('hidden');
+                
+                this.dom.winnerModal.addEventListener('click', (e) => {
+                    if (e.target === this.dom.winnerModal || e.target === this.dom.cancelWinnerBtn) closeModal(this.dom.winnerModal);
+                });
+                this.dom.geminiModal.addEventListener('click', (e) => {
+                    if (e.target === this.dom.geminiModal || e.target === this.dom.geminiModalClose) closeModal(this.dom.geminiModal);
+                });
+                this.dom.confirmModal.addEventListener('click', (e) => {
+                    if (e.target === this.dom.confirmModal || e.target === this.dom.confirmModalCancel) closeModal(this.dom.confirmModal);
+                });
+            },
+
+            // =================================================================
+            // RENDERIZAÇÃO PRINCIPAL E DAS ABAS
+            // =================================================================
+            render() {
+                this.updateNav();
+                const tab = this.state.currentTab;
+                if (tab === 'home') this.renderHome();
+                else if (tab === 'timers') this.renderTimers();
+                else if (tab === 'brackets') this.renderBrackets();
+                else if (tab === 'teams') this.renderTeamsAndScoreboard();
+            },
+
+            updateNav() {
+                this.dom.nav.querySelectorAll('.tab-button').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.tab === this.state.currentTab);
+                });
+            },
+
+            renderHome() {
+                const teamsByScore = [...this.state.teams].sort((a, b) => {
+                    if (b.score !== a.score) return b.score - a.score;
+                    return (b.tieBreaker || 0) - (a.tieBreaker || 0);
+                });
+
+                this.dom.content.innerHTML = `
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
+                            <h2 class="text-2xl font-bold mb-4">Placar Geral</h2>
+                            <ol class="space-y-3">
+                                ${teamsByScore.length > 0 ? teamsByScore.map((team, index) => `
+                                    <li class="flex items-center justify-between p-3 rounded-lg ${index === 0 ? 'bg-[#ece321]' : (index === 1 ? 'bg-[#67c5d9]' : (index === 2 ? 'bg-[#67c5d9]/50' : 'bg-gray-100'))}">
+                                        <div class="flex items-center">
+                                            <span class="text-xl font-bold mr-4 w-8 text-center">${index + 1}º</span>
+                                            <span class="text-lg">${team.name}</span>
+                                        </div>
+                                        <span class="text-xl font-bold">${team.score} Pontos</span>
+                                    </li>
+                                `).join('') : '<p class="text-gray-500">Nenhuma equipe cadastrada ainda.</p>'}
+                            </ol>
+                        </div>
+                        <div class="space-y-6">
+                            <div class="bg-white p-6 rounded-lg shadow-md">
+                                <h2 class="text-2xl font-bold mb-4">Anúncio do Evento</h2>
+                                <div id="announcement-box" class="p-4 bg-[#67c5d9]/20 border-l-4 border-[#67c5d9] text-[#154c9a] rounded-r-lg min-h-[100px]">${this.state.announcement}</div>
+                                <button data-action="generate-announcement" class="mt-4 w-full bg-[#154c9a] text-white py-2 rounded-lg font-bold hover:opacity-90 transition">✨ Gerar Anúncio do Evento</button>
+                            </div>
+                            <div class="bg-white p-6 rounded-lg shadow-md">
+                                <h2 class="text-2xl font-bold mb-4">Competições</h2>
+                                <div class="space-y-4">
+                                    ${Object.entries(this.state.competitions).map(([key, comp]) => `
+                                        <div class="flex items-center p-3 bg-gray-100 rounded-lg">
+                                            <img src="https://placehold.co/64x64/154c9a/ffffff?text=Robô" class="w-16 h-16 rounded-md mr-4" alt="Ícone da competição">
+                                            <div class="flex-grow">
+                                                <h3 class="font-bold text-lg">${comp.name}</h3>
+                                                <p class="text-sm text-gray-600">${comp.type === 'time' ? 'Disputa por tempo' : 'Disputa em duelos'}</p>
+                                            </div>
+                                            ${this.isCompetitionFinished(key) ? '<span class="text-green-500 font-bold">✔️</span>' : ''}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+            
+            renderTimers() {
+                const activeTimerComp = this.state.competitions[this.state.activeTimerId];
+                const isTeamSelected = !!this.state.timer.activeTeamId;
+
+                const competedTeamIds = new Set(activeTimerComp.results.map(r => r.teamId));
+                const availableTeams = this.state.teams.filter(team => !competedTeamIds.has(team.id));
+                
+                this.dom.content.innerHTML = `
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <div class="flex justify-center mb-4 border-b">
+                            ${Object.keys(this.state.competitions).filter(k => this.state.competitions[k].type === 'time').map(key => `
+                                <button data-action="select-timer" data-id="${key}" class="px-4 py-2 text-xl ${this.state.activeTimerId === key ? 'font-bold text-[#154c9a] border-b-2 border-[#154c9a]' : 'text-gray-500'}">${this.state.competitions[key].name}</button>
+                            `).join('')}
+                        </div>
+                        <div class="text-center">
+                             <div class="mb-6 max-w-md mx-auto">
+                                <label for="timer-team-select" class="block text-sm font-medium text-gray-700 mb-1">Selecione a equipe para cronometrar:</label>
+                                <select id="timer-team-select" class="w-full p-2 border border-gray-300 rounded-lg shadow-sm focus:ring-[#154c9a] focus:border-[#154c9a]">
+                                    <option value="">-- Selecione uma equipe --</option>
+                                    ${availableTeams.map(team => `<option value="${team.id}" ${this.state.timer.activeTeamId === team.id ? 'selected' : ''}>${team.name}</option>`).join('')}
+                                </select>
+                                ${availableTeams.length === 0 && this.state.teams.length > 0 ? '<p class="text-sm text-green-600 mt-2">Todas as equipes já registraram tempo nesta competição!</p>' : ''}
+                            </div>
+
+                            <div id="timer-display" class="text-8xl md:text-9xl font-black my-6 tracking-tighter">${this.formatTime(this.state.timer.elapsed)}</div>
+                            
+                            <div class="flex justify-center items-center space-x-2 md:space-x-4 my-6">
+                                <button data-action="adjust-time" data-amount="-10" class="w-16 h-16 rounded-full bg-red-500 text-white text-2xl font-bold hover:bg-red-600 transition" ${!isTeamSelected ? 'disabled' : ''}>-10s</button>
+                                <button data-action="adjust-time" data-amount="-1" class="w-20 h-20 rounded-full bg-red-500 text-white text-3xl font-bold hover:bg-red-600 transition" ${!isTeamSelected ? 'disabled' : ''}>-1s</button>
+                                <button data-action="toggle-timer" class="w-24 h-24 rounded-full ${this.state.timer.running ? 'bg-[#ece321] text-black' : 'bg-green-500'} text-white text-3xl font-bold hover:opacity-90 transition" ${!isTeamSelected ? 'disabled' : ''}>${this.state.timer.running ? 'Parar' : 'Iniciar'}</button>
+                                <button data-action="adjust-time" data-amount="1" class="w-20 h-20 rounded-full bg-[#154c9a] text-white text-3xl font-bold hover:opacity-90 transition" ${!isTeamSelected ? 'disabled' : ''}>+1s</button>
+                                <button data-action="adjust-time" data-amount="10" class="w-16 h-16 rounded-full bg-[#154c9a] text-white text-2xl font-bold hover:opacity-90 transition" ${!isTeamSelected ? 'disabled' : ''}>+10s</button>
+                            </div>
+                            <div class="mt-8">
+                                <button data-action="reset-timer" class="bg-gray-700 text-white px-8 py-3 rounded-lg text-xl hover:bg-gray-800 transition" ${!isTeamSelected ? 'disabled' : ''}>Resetar</button>
+                                <button data-action="save-time" class="bg-[#67c5d9] text-black px-8 py-3 rounded-lg text-xl hover:opacity-90 transition ml-4" ${!isTeamSelected || this.state.timer.running ? 'disabled' : ''}>Salvar Tempo</button>
+                            </div>
+                        </div>
+                        <div class="mt-8">
+                            <h3 class="text-xl font-bold mb-2">Resultados - ${activeTimerComp.name}</h3>
+                            <ol class="list-decimal list-inside space-y-1">
+                                ${[...activeTimerComp.results].sort((a,b) => {
+                                    if (a.time !== b.time) return a.time - b.time;
+                                    return a.timestamp - b.timestamp;
+                                }).map(r => `
+                                    <li>${this.getTeamName(r.teamId)}: <span class="font-mono">${this.formatTime(r.time, true)}</span></li>
+                                `).join('')}
+                            </ol>
+                        </div>
+                    </div>
+                `;
+            },
+
+            renderBrackets() {
+                const activeBracketComp = this.state.competitions[this.state.activeBracketId];
+                this.dom.content.innerHTML = `
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <div class="flex justify-center mb-4 border-b">
+                            ${Object.keys(this.state.competitions).filter(k => this.state.competitions[k].type === 'bracket').map(key => `
+                                <button data-action="select-bracket" data-id="${key}" class="px-4 py-2 text-xl ${this.state.activeBracketId === key ? 'font-bold text-[#154c9a] border-b-2 border-[#154c9a]' : 'text-gray-500'}">${this.state.competitions[key].name}</button>
+                            `).join('')}
+                        </div>
+                        <div class="text-center mb-6">
+                            <button data-action="generate-bracket" class="bg-[#154c9a] text-white px-6 py-2 rounded-lg hover:opacity-90 transition">Gerar Chaveamento</button>
+                        </div>
+                        <div id="bracket-container" class="bracket">
+                            ${activeBracketComp.bracket ? this.renderBracketHTML(activeBracketComp.bracket) : '<p class="text-gray-500">Gere o chaveamento para começar.</p>'}
+                        </div>
+                    </div>
+                `;
+            },
+
+            renderBracketHTML(bracket) {
+                if (!bracket || bracket.length === 0) return '';
+                return bracket.map((round, roundIndex) => `
+                    <div class="round" id="round-${roundIndex}">
+                        ${round.map((match, matchIndex) => {
+                            const team1 = match.teams[0];
+                            const team2 = match.teams[1];
+                            const isBye = (team1 && team1.isBye) || (team2 && team2.isBye);
+                            const isFinalWinner = match.isTournamentWinner;
+                            return `
+                                <div class="relative">
+                                    <div class="match ${isBye ? 'bye' : ''}" data-round="${roundIndex}" data-match="${matchIndex}">
+                                        <div class="team ${team1 && team1.id === match.winner ? 'winner' : ''} ${!team1 || team1.isPlaceholder ? 'empty' : ''}" data-team-id="${team1 ? team1.id : ''}">${team1 ? team1.name : 'A definir'}</div>
+                                        <div class="text-sm font-bold text-gray-400 my-1">VS</div>
+                                        <div class="team ${team2 && team2.id === match.winner ? 'winner' : ''} ${!team2 || team2.isPlaceholder ? 'empty' : ''}" data-team-id="${team2 ? team2.id : ''}">${team2 ? team2.name : 'A definir'}</div>
+                                    </div>
+                                    ${isFinalWinner ? `<button data-action="generate-winner-summary" data-winner-id="${match.winner}" class="absolute -bottom-8 left-1/2 -translate-x-1/2 w-max bg-[#ece321] text-black px-2 py-1 text-xs font-bold rounded shadow-lg hover:opacity-90">✨ Celebrar Campeão</button>` : ''}
+                                    ${roundIndex < bracket.length - 1 ? '<div class="match-connector"></div>' : ''}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `).join('');
+            },
+
+            renderTeamsAndScoreboard() {
+                const allDone = this.areAllCompetitionsFinished();
+                this.dom.content.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h2 class="text-2xl font-bold mb-4">Gerenciar Equipes</h2>
+                            <div class="flex mb-2">
+                                <input id="team-name-input" type="text" placeholder="Nome da nova equipe" class="flex-grow p-2 border rounded-l-lg focus:ring-2 focus:ring-[#154c9a] focus:outline-none">
+                                <button data-action="add-team" class="bg-[#154c9a] text-white px-4 py-2 rounded-r-lg hover:opacity-90 transition">Adicionar</button>
+                            </div>
+                            <div class="text-center mb-4">
+                                <button data-action="suggest-team-names" class="text-sm text-[#154c9a] hover:underline">✨ Precisa de inspiração? Sugerir nomes de equipe!</button>
+                            </div>
+                            <ul id="team-list" class="space-y-2 max-h-96 overflow-y-auto">
+                                ${this.state.teams.map(team => `
+                                    <li class="flex justify-between items-center p-2 bg-gray-100 rounded-lg">
+                                        <span>${team.name}</span>
+                                        <button data-action="remove-team" data-id="${team.id}" class="text-red-500 hover:text-red-700 font-bold">Remover</button>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow-md flex flex-col justify-between">
+                            <div>
+                                <h2 class="text-2xl font-bold mb-4">Placar</h2>
+                                <p class="text-gray-600 mb-4">Use o botão abaixo para (re)calcular as pontuações a qualquer momento com base nos resultados atuais.</p>
+                                <button data-action="calculate-scores" class="w-full bg-green-600 text-white py-3 rounded-lg text-lg font-bold hover:bg-green-700 transition">Calcular Pontos</button>
+                            </div>
+                            <div class="mt-8 pt-6 border-t">
+                                <h2 class="text-2xl font-bold mb-4 text-[#154c9a]">Finalizar Evento</h2>
+                                <p class="text-gray-600 mb-4">Quando todas as competições estiverem concluídas, clique aqui para celebrar o grande campeão!</p>
+                                <button data-action="finalize-event" class="w-full bg-[#154c9a] text-white py-3 rounded-lg text-lg font-bold hover:opacity-90 transition" ${!allDone ? 'disabled' : ''}>🏆 Finalizar Evento e Celebrar Campeão 🏆</button>
+                                ${!allDone && this.state.teams.length > 0 ? '<p class="text-sm text-center text-red-600 mt-2">Ainda há competições a serem finalizadas.</p>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+
+            // =================================================================
+            // LÓGICA E MANIPULADORES DE EVENTOS
+            // =================================================================
+            handleContentChange(e) {
+                if (e.target.id === 'timer-team-select') {
+                    this.state.timer.activeTeamId = e.target.value || null;
+                    this.resetTimer(false);
+                    this.renderTimers();
+                }
+            },
+
+            handleContentClick(e) {
+                const matchEl = e.target.closest('.match:not(.bye)');
+                if (matchEl) {
+                    const { round, match } = matchEl.dataset;
+                    this.selectWinner(parseInt(round), parseInt(match));
+                    return;
+                }
+
+                const button = e.target.closest('button');
+                if (!button) return;
+                
+                const action = button.dataset.action;
+                if (!action) return;
+
+                if (action === 'generate-announcement') this.generateEventAnnouncement();
+                if (action === 'suggest-team-names') this.suggestTeamNames();
+                if (action === 'generate-winner-summary') this.generateWinnerSummary(button.dataset.winnerId);
+                if (action === 'toggle-timer') this.toggleTimer();
+                if (action === 'reset-timer') this.resetTimer(true);
+                if (action === 'adjust-time') this.adjustTime(parseInt(button.dataset.amount, 10));
+                if (action === 'save-time') this.saveTime();
+                if (action === 'select-timer') {
+                    this.state.activeTimerId = button.dataset.id;
+                    this.resetTimer(true);
+                    this.render();
+                }
+                if (action === 'add-team') this.addTeam();
+                if (action === 'remove-team') this.removeTeam(button.dataset.id);
+                if (action === 'select-bracket') {
+                    this.state.activeBracketId = button.dataset.id;
+                    this.render();
+                }
+                if (action === 'generate-bracket') this.generateBracket();
+                if (action === 'calculate-scores') {
+                    this.calculateAllScores();
+                    this.showInfoModal('Pontuações Calculadas!', '<p>As pontuações de todas as equipes foram calculadas com os critérios de desempate e o Placar Geral foi atualizado.</p>');
+                    this.render();
+                }
+                if (action === 'finalize-event') {
+                    button.disabled = true;
+                    this.finalizeEvent();
+                }
+            },
+
+            // =================================================================
+            // FUNÇÕES DA API GEMINI E MÚSICA
+            // =================================================================
+            async callGemini(prompt) {
+                this.state.loading = true;
+                this.render();
+                const apiKey = "AIzaSyAmC4xcR1eR9NU1_D0LZBxAiXC_M8OratY"; 
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error(`Erro na API: ${response.statusText}`);
+                    const result = await response.json();
+                    if (result.candidates && result.candidates.length > 0) return result.candidates[0].content.parts[0].text;
+                    return "Não foi possível obter uma resposta da IA. Tente novamente.";
+                } catch (error) {
+                    console.error("Erro ao chamar a API Gemini:", error);
+                    return `Ocorreu um erro: ${error.message}. Verifique a consola para mais detalhes.`;
+                } finally {
+                    this.state.loading = false;
+                    this.render();
+                }
+            },
+            async generateEventAnnouncement() { /* (Função não alterada) */ },
+            async suggestTeamNames() { /* (Função não alterada) */ },
+            async generateWinnerSummary(winnerId) { /* (Função não alterada) */ },
+            
+            async generateGrandChampionAnnouncement(champion, podium) {
+                this.showInfoModal('Celebrando o Grande Campeão!', '<div class="spinner mx-auto"></div>');
+                const podiumText = podium.map((team, index) => `${index + 1}º Lugar: ${team.name}`).join(', ');
+                const prompt = `Você é o locutor oficial da grande final da IVª Exposição de Robótica Municipal de Porto Feliz. A competição terminou. A equipe "${champion.name}" é a grande campeã! O pódio final é: ${podiumText}. Escreva um anúncio final emocionante e memorável (4-5 frases). Comece parabenizando TODAS as equipes pelo esforço. Em seguida, anuncie com grande entusiasmo a equipe campeã, "${champion.name}", como a melhor da feira. Termine celebrando o pódio e agradecendo a todos os participantes e ao público.`;
+                
+                const summary = await this.callGemini(prompt);
+
+                let podiumHTML = '<ol class="space-y-3 my-4">';
+                podium.forEach((team, index) => {
+                    const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉';
+                    podiumHTML += `
+                        <li class="flex items-center justify-between p-3 rounded-lg text-xl ${index === 0 ? 'bg-[#ece321]' : (index === 1 ? 'bg-[#67c5d9]' : 'bg-[#67c5d9]/50')}">
+                            <div><span class="font-bold text-2xl mr-4">${medal}</span> ${team.name}</div>
+                            <div class="font-bold">${team.score} Pontos</div>
+                        </li>
+                    `;
+                });
+                podiumHTML += '</ol>';
+
+                const finalContent = `<div class="text-lg">${summary.replace(/\n/g, '<br><br>')}</div><hr class="my-4">${podiumHTML}`;
+                this.showInfoModal(`🏆 GRANDE CAMPEÃO: ${champion.name} 🏆`, finalContent);
+            },
+            
+            playChampionMelody() {
+                try {
+                    const audioPlayer = this.dom.championAudio;
+                    // =================================================================
+                    // LOCAL PARA INSERIR O LINK DA MÚSICA
+                    // =================================================================
+                    // Substitua a string vazia pelo link direto para o seu ficheiro .mp3
+                    audioPlayer.src = "https://github.com/fbiomarcelo/feirarobotica/blob/main/We%20Are%20the%20Champions%20-%20Queen(com%20tradu%C3%A7%C3%A3o).mp3"; 
+                    // =================================================================
+                    
+                    audioPlayer.play().catch(e => {
+                        console.error("Erro ao tocar o áudio:", e);
+                        this.showInfoModal('Aviso de Áudio', '<p>O navegador impediu a reprodução automática do áudio. Por favor, interaja com a página primeiro.</p>');
+                    });
+                } catch (e) {
+                    console.error("Erro na função de áudio:", e);
+                }
+            },
+
+            // --- Lógica do Cronômetro ---
+            toggleTimer() { /* (Função não alterada) */ },
+            resetTimer(resetTeam = true) { /* (Função não alterada) */ },
+            adjustTime(seconds) { /* (Função não alterada) */ },
+            saveTime() {
+                const teamId = this.state.timer.activeTeamId;
+                if (!teamId || this.state.timer.elapsed === 0) {
+                    this.showInfoModal('Aviso', '<p>Selecione uma equipe e marque um tempo antes de salvar.</p>');
+                    return;
+                }
+                
+                const competition = this.state.competitions[this.state.activeTimerId];
+                competition.results.push({ teamId: teamId, time: this.state.timer.elapsed, timestamp: Date.now() });
+                
+                const competedTeamIds = new Set(competition.results.map(r => r.teamId));
+                if (competedTeamIds.size === this.state.teams.length && this.state.teams.length > 0) {
+                    this.showTimerCompetitionResults(this.state.activeTimerId);
+                } else {
+                     this.showInfoModal('Tempo Salvo!', `<p>Tempo de ${this.formatTime(this.state.timer.elapsed, true)} salvo para a equipe ${this.getTeamName(teamId)}.</p>`);
+                }
+                this.resetTimer(true);
+            },
+            showTimerCompetitionResults(competitionId) {
+                const competition = this.state.competitions[competitionId];
+                const sortedResults = [...competition.results].sort((a, b) => {
+                    if (a.time !== b.time) return a.time - b.time;
+                    return a.timestamp - b.timestamp;
+                });
+
+                let content = '<ol class="space-y-2">';
+                sortedResults.forEach((result, index) => {
+                    const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}º`;
+                    content += `
+                        <li class="flex items-center justify-between p-2 rounded-lg ${index === 0 ? 'bg-[#ece321]' : ''}">
+                            <div><span class="font-bold text-lg mr-3">${medal}</span> ${this.getTeamName(result.teamId)}</div>
+                            <div class="font-mono">${this.formatTime(result.time, true)}</div>
+                        </li>
+                    `;
+                });
+                content += '</ol>';
+                const winnerName = this.getTeamName(sortedResults[0].teamId);
+                content += `<p class="mt-4 font-bold text-lg text-center">Parabéns a ${winnerName} pela vitória no desafio ${competition.name}!</p>`;
+                content += `<p class="mt-2 text-sm text-gray-600 text-center">O Placar Geral pode ser atualizado na aba "Equipes e Placar".</p>`;
+                this.showInfoModal(`Resultados Finais: ${competition.name}`, content);
+            },
+
+            // --- Lógica das Equipes ---
+            addTeam() { /* (Função não alterada) */ },
+            removeTeam(id) { /* (Função não alterada) */ },
+
+            // --- Lógica do Chaveamento ---
+            generateBracket() {
+                const competition = this.state.competitions[this.state.activeBracketId];
+                if (this.state.teams.length < 2) {
+                    this.showInfoModal('Aviso', '<p>É preciso ter pelo menos 2 equipes para gerar um chaveamento.</p>');
+                    return;
+                }
+                let teams = [...this.state.teams].sort(() => 0.5 - Math.random());
+                const numTeams = teams.length;
+                const nextPowerOfTwo = Math.pow(2, Math.ceil(Math.log2(numTeams)));
+                const byes = nextPowerOfTwo - numTeams;
+                const numRounds = Math.log2(nextPowerOfTwo);
+
+                // Equipes que avançam direto
+                let teamsWithBye = teams.slice(0, byes);
+                // Equipes que jogam na primeira rodada
+                let teamsInRound1 = teams.slice(byes);
+
+                let round1 = [];
+
+                // Cria os confrontos da primeira rodada
+                for (let i = 0; i < teamsInRound1.length; i += 2) {
+                    round1.push({ teams: [teamsInRound1[i], teamsInRound1[i+1]], winner: null, isTournamentWinner: false });
+                }
+
+                // Adiciona as equipes que avançaram direto ("SEM EQUIPE" para o oponente)
+                for (const team of teamsWithBye) {
+                    round1.push({ teams: [team, { id: `bye-${team.id}`, name: 'SEM EQUIPE', isBye: true }], winner: null, isTournamentWinner: false });
+                }
+                
+                // Embaralha os confrontos da primeira rodada para que as "folgas" fiquem em posições aleatórias
+                round1.sort(() => 0.5 - Math.random());
+
+                let bracket = [round1];
+
+                // Cria a estrutura para as rodadas seguintes
+                for (let i = 1; i < numRounds; i++) {
+                    let previousRound = bracket[i-1];
+                    let nextRound = [];
+                    for (let j = 0; j < previousRound.length / 2; j++) {
+                        nextRound.push({ teams: [{isPlaceholder: true, name: 'A definir'}, {isPlaceholder: true, name: 'A definir'}], winner: null });
+                    }
+                    bracket.push(nextRound);
+                }
+                
+                competition.bracket = bracket;
+                
+                // Processa as "folgas" imediatamente para avançar as equipes
+                this.processByes(competition.bracket);
+                
+                this.render();
+            },
+            processByes(bracket) {
+                if (!bracket || !bracket[0]) return;
+                bracket[0].forEach((match, matchIndex) => {
+                    const byeTeamIndex = match.teams.findIndex(t => t.isBye);
+                    if (byeTeamIndex !== -1) {
+                        const winnerTeam = match.teams[byeTeamIndex === 0 ? 1 : 0];
+                        if (winnerTeam && !winnerTeam.isBye) {
+                           match.winner = winnerTeam.id;
+                           this.advanceWinner(bracket, 0, matchIndex, winnerTeam);
+                        }
+                    }
+                });
+            },
+            selectWinner(roundIndex, matchIndex) {
+                const competition = this.state.competitions[this.state.activeBracketId];
+                const match = competition.bracket[roundIndex][matchIndex];
+                if (match.teams.some(t => !t || t.isPlaceholder || t.isBye)) return;
+                this.dom.winnerOptions.innerHTML = match.teams.map(team => `<button data-winner-id="${team.id}" class="w-full bg-[#154c9a] text-white p-4 rounded-lg text-xl hover:opacity-90 transition">${team.name}</button>`).join('');
+                this.dom.winnerModal.classList.remove('hidden');
+                this.dom.winnerOptions.onclick = (e) => {
+                    const button = e.target.closest('[data-winner-id]');
+                    if (button) {
+                        this.setWinner(roundIndex, matchIndex, button.dataset.winnerId);
+                        this.dom.winnerModal.classList.add('hidden');
+                    }
+                };
+            },
+            setWinner(roundIndex, matchIndex, winnerId) {
+                const competition = this.state.competitions[this.state.activeBracketId];
+                const bracket = competition.bracket;
+                const match = bracket[roundIndex][matchIndex];
+                
+                const winnerTeam = match.teams.find(t => t && t.id === winnerId);
+                
+                if (winnerTeam) {
+                    match.winner = winnerId;
+                    this.advanceWinner(bracket, roundIndex, matchIndex, winnerTeam);
+                } else {
+                    console.error("Erro: Equipe vencedora não encontrada.", { roundIndex, matchIndex, winnerId });
+                }
+
+                this.render();
+            },
+            advanceWinner(bracket, roundIndex, matchIndex, winnerTeam) {
+                if (roundIndex < bracket.length - 1) {
+                    const nextRoundIndex = roundIndex + 1;
+                    const nextMatchIndex = Math.floor(matchIndex / 2);
+                    const slotIndex = matchIndex % 2;
+                    if (bracket[nextRoundIndex] && bracket[nextRoundIndex][nextMatchIndex]) {
+                        bracket[nextRoundIndex][nextMatchIndex].teams[slotIndex] = winnerTeam;
+                    }
+                } else {
+                    bracket[roundIndex][matchIndex].isTournamentWinner = true;
+                }
+            },
+
+            // --- Lógica do Placar e Evento ---
+            calculateAllScores() {
+                const weights = { furaBaloes: 4, seguidorLinha: 3, autonomo: 2, corrida: 1 };
+                const totalTeams = this.state.teams.length;
+
+                this.state.teams.forEach(team => {
+                    team.score = 0;
+                    team.tieBreaker = 0;
+                });
+
+                Object.entries(this.state.competitions).forEach(([compId, comp]) => {
+                    if (!this.isCompetitionFinished(compId)) return;
+
+                    let rankedTeams = []; 
+
+                    if (comp.type === 'time') {
+                        const sortedResults = [...comp.results].sort((a, b) => {
+                            if (a.time !== b.time) return a.time - b.time;
+                            return a.timestamp - b.timestamp;
+                        });
+                        rankedTeams = sortedResults.map((result, index) => ({ teamId: result.teamId, rank: index + 1 }));
+                    } else { // bracket
+                        const bracket = comp.bracket;
+                        const numRounds = bracket.length;
+                        const finalMatch = bracket[numRounds - 1][0];
+                        const winnerId = finalMatch.winner;
+                        const loserId = finalMatch.teams.find(t => t && t.id !== winnerId)?.id;
+                        
+                        if (winnerId) rankedTeams.push({ teamId: winnerId, rank: 1 });
+                        if (loserId) rankedTeams.push({ teamId: loserId, rank: 2 });
+
+                        if (numRounds > 1) {
+                            const semiFinalRound = bracket[numRounds - 2];
+                            semiFinalRound.forEach(match => {
+                                const semiLoser = match.teams.find(t => t && t.id !== match.winner);
+                                if (semiLoser && semiLoser.id !== winnerId && semiLoser.id !== loserId) {
+                                    rankedTeams.push({ teamId: semiLoser.id, rank: 3 });
+                                }
+                            });
+                        }
+                    }
+                    
+                    const allParticipants = comp.type === 'time' 
+                        ? new Set(comp.results.map(r => r.teamId))
+                        : new Set(comp.bracket.flat().flatMap(m => m.teams.map(t => t && !t.isBye && t.id).filter(Boolean)));
+
+                    allParticipants.forEach(teamId => {
+                        if (!rankedTeams.some(rt => rt.teamId === teamId)) {
+                            rankedTeams.push({ teamId: teamId, rank: 5 }); // Rank para os demais
+                        }
+                    });
+
+                    rankedTeams.forEach(({ teamId, rank }) => {
+                        const team = this.state.teams.find(t => t.id === teamId);
+                        if (!team) return;
+
+                        if (rank === 1) team.score += 50;
+                        else if (rank === 2) team.score += 30;
+                        else if (rank === 3) team.score += 20;
+                        else team.score += 10;
+
+                        const tieBreakPoints = (totalTeams - rank + 1) * weights[compId];
+                        team.tieBreaker += tieBreakPoints;
+                    });
+                });
+            },
+
+            isCompetitionFinished(compId) {
+                if (!this.state.teams.length) return false;
+                const comp = this.state.competitions[compId];
+                if (comp.type === 'time') {
+                    return comp.results.length === this.state.teams.length;
+                }
+                if (comp.type === 'bracket') {
+                    if (!comp.bracket) return false;
+                    const finalRound = comp.bracket[comp.bracket.length - 1];
+                    return finalRound && finalRound[0] && finalRound[0].winner;
+                }
+                return false;
+            },
+
+            areAllCompetitionsFinished() {
+                if (!this.state.teams.length) return false;
+                return Object.keys(this.state.competitions).every(compId => this.isCompetitionFinished(compId));
+            },
+
+            async finalizeEvent() {
+                const finalizeButton = this.dom.content.querySelector('[data-action="finalize-event"]');
+                if (finalizeButton) finalizeButton.disabled = true;
+
+                this.playChampionMelody();
+                this.calculateAllScores();
+                const sortedTeams = [...this.state.teams].sort((a, b) => {
+                    if (b.score !== a.score) return b.score - a.score;
+                    return b.tieBreaker - a.tieBreaker;
+                });
+                const champion = sortedTeams[0];
+                const podium = sortedTeams.slice(0, 3);
+                await this.generateGrandChampionAnnouncement(champion, podium);
+                this.render();
+            },
+
+            // =================================================================
+            // FUNÇÕES UTILITÁRIAS E MODAIS
+            // =================================================================
+            formatTime(ms, showMs = true) { /* (Função não alterada) */ },
+            getTeamName(id) { /* (Função não alterada) */ },
+            showInfoModal(title, content) { /* (Função não alterada) */ },
+            showConfirmModal(message, onConfirm) { /* (Função não alterada) */ }
+        };
+
+        // Copiando funções não alteradas para economizar espaço
+        App.generateEventAnnouncement = async function() {
+            const announcementBox = document.getElementById('announcement-box');
+            announcementBox.innerHTML = '<div class="spinner mx-auto"></div>';
+            const teamsByScore = [...this.state.teams].sort((a, b) => b.score - a.score);
+            const top3 = teamsByScore.slice(0, 3).map((t, i) => `${i+1}º lugar: ${t.name} (${t.score} pontos)`).join(', ');
+            const prompt = `Você é um locutor entusiasmado da IVª Exposição de Robótica Municipal de Porto Feliz. O público está a ver este painel. Escreva um anúncio curto (2-3 frases) e muito empolgante sobre o estado atual da competição. O placar atual é: ${top3 || 'ainda sem pontuação'}. Termine com uma frase que motive as equipes e o público.`;
+            const announcement = await this.callGemini(prompt);
+            this.state.announcement = announcement.replace(/\n/g, '<br>');
+            this.renderHome();
+        };
+        App.suggestTeamNames = async function() {
+            this.showInfoModal('Sugerindo Nomes...', '<div class="spinner mx-auto"></div>');
+            const prompt = "Sugira 10 nomes de equipe criativos e em português para uma competição de robótica educacional. Os temas podem ser tecnologia, robôs, futuro ou nomes engraçados. Apresente como uma lista numerada.";
+            const suggestions = await this.callGemini(prompt);
+            this.showInfoModal('Sugestões de Nomes de Equipe', suggestions.replace(/\n/g, '<br>'));
+        };
+        App.generateWinnerSummary = async function(winnerId) {
+            const winner = this.getTeamName(winnerId);
+            const competitionName = this.state.competitions[this.state.activeBracketId].name;
+            this.showInfoModal(`Celebrando ${winner}!`, '<div class="spinner mx-auto"></div>');
+            const prompt = `Você é um jornalista desportivo a cobrir a final da IVª Exposição de Robótica Municipal de Porto Feliz. A equipe "${winner}" acabou de vencer a competição de "${competitionName}". Escreva um parágrafo curto (3-4 frases), épico e celebratório sobre a sua incrível vitória, destacando a sua jornada até se tornarem os grandes campeões.`;
+            const summary = await this.callGemini(prompt);
+            this.showInfoModal(`🏆 Campeões: ${winner} 🏆`, `<p class="text-lg">${summary.replace(/\n/g, '<br>')}</p>`);
+        };
+        App.addTeam = function() {
+            const input = this.dom.content.querySelector('#team-name-input');
+            const name = input.value.trim();
+            if (name) {
+                const newTeam = { id: Date.now().toString(), name: name, score: 0, tieBreaker: 0 };
+                this.state.teams.push(newTeam);
+                input.value = '';
+                this.render();
+            }
+        };
+        App.removeTeam = function(id) {
+            this.showConfirmModal('Tem certeza que deseja remover esta equipe?', () => {
+                this.state.teams = this.state.teams.filter(team => team.id !== id);
+                Object.values(this.state.competitions).forEach(comp => {
+                    if (comp.type === 'time') comp.results = comp.results.filter(r => r.teamId !== id);
+                    if (comp.type === 'bracket') comp.bracket = null;
+                });
+                this.render();
+            });
+        };
+        App.toggleTimer = function() {
+            if (!this.state.timer.activeTeamId) return;
+            if (this.state.timer.running) {
+                clearInterval(this.state.timer.instance);
+                this.state.timer.running = false;
+            } else {
+                this.state.timer.startTime = Date.now() - this.state.timer.elapsed;
+                this.state.timer.instance = setInterval(() => {
+                    this.state.timer.elapsed = Date.now() - this.state.timer.startTime;
+                    this.dom.content.querySelector('#timer-display').textContent = this.formatTime(this.state.timer.elapsed);
+                }, 50);
+                this.state.timer.running = true;
+            }
+            this.renderTimers();
+        };
+        App.resetTimer = function(resetTeam = true) {
+            clearInterval(this.state.timer.instance);
+            this.state.timer.instance = null;
+            this.state.timer.startTime = 0;
+            this.state.timer.elapsed = 0;
+            this.state.timer.running = false;
+            if (resetTeam) {
+                this.state.timer.activeTeamId = null;
+            }
+            this.renderTimers();
+        };
+        App.adjustTime = function(seconds) {
+            if (!this.state.timer.activeTeamId) return;
+            const newElapsed = this.state.timer.elapsed + (seconds * 1000);
+            this.state.timer.elapsed = Math.max(0, newElapsed);
+            if (this.state.timer.running) {
+                this.state.timer.startTime = Date.now() - this.state.timer.elapsed;
+            }
+            this.renderTimers();
+        };
+        App.showTimerCompetitionResults = function(competitionId) {
+            const competition = this.state.competitions[competitionId];
+            const sortedResults = [...competition.results].sort((a, b) => {
+                if (a.time !== b.time) return a.time - b.time;
+                return a.timestamp - b.timestamp;
+            });
+            let content = '<ol class="space-y-2">';
+            sortedResults.forEach((result, index) => {
+                const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}º`;
+                content += `
+                    <li class="flex items-center justify-between p-2 rounded-lg ${index === 0 ? 'bg-[#ece321]' : ''}">
+                        <div><span class="font-bold text-lg mr-3">${medal}</span> ${this.getTeamName(result.teamId)}</div>
+                        <div class="font-mono">${this.formatTime(result.time, true)}</div>
+                    </li>
+                `;
+            });
+            content += '</ol>';
+            const winnerName = this.getTeamName(sortedResults[0].teamId);
+            content += `<p class="mt-4 font-bold text-lg text-center">Parabéns a ${winnerName} pela vitória no desafio ${competition.name}!</p>`;
+            content += `<p class="mt-2 text-sm text-gray-600 text-center">O Placar Geral pode ser atualizado na aba "Equipes e Placar".</p>`;
+            this.showInfoModal(`Resultados Finais: ${competition.name}`, content);
+        };
+        App.formatTime = function(ms, showMs = true) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+            const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+            const milliseconds = (ms % 1000).toString().padStart(3, '0').slice(0, 2);
+            return showMs ? `${minutes}:${seconds}:${milliseconds}` : `${minutes}:${seconds}`;
+        };
+        App.getTeamName = function(id) {
+            const team = this.state.teams.find(t => t.id === id);
+            return team ? team.name : 'Equipe Desconhecida';
+        };
+        App.showInfoModal = function(title, content) {
+            this.dom.geminiModalTitle.innerHTML = title;
+            this.dom.geminiModalContent.innerHTML = content;
+            this.dom.geminiModal.classList.remove('hidden');
+        };
+        App.showConfirmModal = function(message, onConfirm) {
+            this.dom.confirmModalTitle.textContent = message;
+            this.dom.confirmModal.classList.remove('hidden');
+            this.dom.confirmModalConfirm.onclick = () => {
+                this.dom.confirmModal.classList.add('hidden');
+                onConfirm();
+            };
+        };
+
+        document.addEventListener('DOMContentLoaded', () => App.init());
+    </script>
+</body>
+</html>
